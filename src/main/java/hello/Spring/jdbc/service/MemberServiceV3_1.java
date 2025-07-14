@@ -2,47 +2,50 @@ package hello.Spring.jdbc.service;
 
 import hello.Spring.jdbc.domain.Member;
 import hello.Spring.jdbc.repository.MemberRepositoryV2;
+import hello.Spring.jdbc.repository.MemberRepositoryV3;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- *  트랜잭션 -파라미터 연동, 풀을 고려한 종료
+ *  트랜잭션 - 트랜잭션 매니저
  */
 @Slf4j
 @RequiredArgsConstructor
-public class MemberServiceV2 {
-    private final DataSource dataSource;
-    private final MemberRepositoryV2 memberRepository;
+public class MemberServiceV3_1 {
+    private final PlatformTransactionManager transactionManager;
+    private final MemberRepositoryV3 memberRepository;
 
     public void accountTransfer(String fromId,String toId, int money) throws SQLException {
-        Connection con = dataSource.getConnection();
+        TransactionStatus status = transactionManager.getTransaction(new DefaultTransactionDefinition());
+
         try {
-            con.setAutoCommit(false);
+
             //비즈니스 로직
-            bizLogic(con, fromId, toId, money);
-            con.commit();
+            bizLogic( fromId, toId, money);
+            transactionManager.commit(status);
         }catch (SQLException e) {
-            con.rollback();
+            transactionManager.rollback(status);
             throw new IllegalStateException(e);
 
-        }finally{
-            release(con);
         }
 
 
     }
 
-    private void bizLogic(Connection con, String fromId, String toId, int money) throws SQLException {
-        Member fromMember = memberRepository.findById(con, fromId);
-        Member toMember = memberRepository.findById(con, toId);
+    private void bizLogic( String fromId, String toId, int money) throws SQLException {
+        Member fromMember = memberRepository.findById( fromId);
+        Member toMember = memberRepository.findById(toId);
 
-        memberRepository.update(con, fromId, fromMember.getMoney()- money);
+        memberRepository.update( fromId, fromMember.getMoney()- money);
         validation(toMember);
-        memberRepository.update(con, toId, toMember.getMoney()+ money);
+        memberRepository.update( toId, toMember.getMoney()+ money);
     }
 
     private static void release(Connection con) {
